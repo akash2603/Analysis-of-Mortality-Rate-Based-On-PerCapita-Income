@@ -1,5 +1,5 @@
 ---
-title: "Analysis of US Mortality Rate Based On Per Capita Income"
+title: "Analysis of Mortality Rate Based On Per Capita Income"
 author: "Akash Barnwal"
 date: "November 6, 2016"
 output: html_document
