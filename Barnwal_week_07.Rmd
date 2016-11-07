@@ -1,0 +1,151 @@
+---
+title: "Analysis of Mortality Rate Based On PerCapita Income"
+author: "Akash Barnwal"
+date: "November 6, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+# Running all the necessary libraries.
+library(tidyverse)
+library(gapminder)
+library(ggplot2)
+library(ggthemes)
+library(xkcd)
+library(wesanderson)
+library(gridExtra)
+library(viridis)
+library(RColorBrewer)
+library(readxl)
+library(hexbin)
+library(rvest)
+library(plotly)
+library(stringi)
+library(stringr)
+```
+
+```{r}
+
+# Getting the data set from the folder. Initially getwd gives the locatio where r is assigned to keep the data and then setwd setwd sets the location to wherever required. Assigning a data frame to maternal mortality.
+getwd()
+setwd("E:/DataScience/DataWrangling/Assignment 7")
+maternal_mortality <- as.data.frame(read_csv("xmart.csv"))
+
+# Assigning smaller names to the columns. This will help to pull the records easily and conveniently.
+
+names(maternal_mortality)[names(maternal_mortality)=="Maternal mortality ratio (per 100 000 live births)"] <- "Mortality_Ratio"
+names(maternal_mortality)[names(maternal_mortality)=="Births attended by skilled health personnel (%)"] <- "Birth_Skilled_Professional"
+
+
+# Removing the spaces from the Mortality_Ratio column
+
+maternal_mortality$Mortality_Ratio<- gsub(" ", "", maternal_mortality$Mortality_Ratio , fixed = TRUE)
+
+
+# Taking the exact number of Maternal Mortality ratio and creating one more column for the same.
+
+maternal_mortality$Mortality_Ratio1<- str_extract(maternal_mortality[, "Mortality_Ratio"], "[0-9]+")
+
+# Removing the numbers from the column so that we can later extract the lower and upper bounds.
+maternal_mortality$Mortality_Ratio <- str_replace(maternal_mortality$Mortality_Ratio, "[0-9]+","")
+
+# Extracting the lowe rbound
+maternal_mortality$Lower_Bound <- str_extract(maternal_mortality[, "Mortality_Ratio"], "\\[[0-9]+-") %>%  str_replace("\\[","") %>% str_replace("-","")
+  
+# Removing the lower bound string from the original column
+maternal_mortality$Mortality_Ratio <- str_replace(maternal_mortality$Mortality_Ratio, "\\[[0-9]+-", "") %>%  str_replace("\\[","") %>% str_replace("-","")
+  
+
+# Extracting the upper bound
+maternal_mortality$Upper_Bound <- str_replace(maternal_mortality[, "Mortality_Ratio"], "\\]","")
+
+# Taking the first name from the Year where there is a range assigned.
+maternal_mortality$Year <- str_replace(maternal_mortality[, "Year"], "-[0-9]+","")
+
+# Taking all the necessary variables required for the analysis
+maternal_mortality_final <- maternal_mortality[,-3]
+
+```
+
+```{r}
+
+# Extracting the data and then putting into a dataframe income
+
+getwd()
+setwd("E:/DataScience/DataWrangling/Assignment 7")
+income <- as.data.frame(read_csv("data.csv"))
+
+income <- setNames(income, rep(" ", length(income)))
+
+
+
+colnames(income) = income[1, ]
+income = income[-1,]
+
+
+# Using gather to put the table in the format required.  Tidy this data, so that there is one entry per country per year
+
+
+filter <- income %>% gather(key = "year", value = "Gross_Income", -c(Country))
+
+# Merge the two files by country and year, retaining only rows for which you have per capita income and either maternal mortality or percentage attended births
+
+final_table <- merge(maternal_mortality_final, filter, by.x = c("Country","Year"), by.y =c("Country","year") ,all=TRUE)
+ 
+
+# Merge the two files by country and year, retaining only rows for which you have per capita income and either maternal mortality or percentage attended births
+
+ 
+final_table<- final_table[!is.na(final_table$Gross_Income),]
+
+final_table<- final_table[!with(final_table,is.na(Birth_Skilled_Professional)& is.na(Mortality_Ratio1)),]
+
+
+# Converting all te columns to numeric
+
+final_table$Mortality_Ratio1<- as.numeric(final_table$Mortality_Ratio1)
+
+final_table$Gross_Income <- str_replace(final_table$Gross_Income," ","")
+
+final_table$Gross_Income<- as.numeric(final_table$Gross_Income)
+
+#ggplot for relating income to maternal mortality 
+
+ggplot(final_table,aes(Mortality_Ratio1,Gross_Income,colour = Year )) + geom_point() +  xlab("Mortality_Ratio") + ylab("Gross_Income") + theme(panel.grid.minor = element_line(colour = "gray96", 
+    linetype = "dashed"), panel.background = element_rect(fill = "gray87", 
+    colour = "blue1"))
+
+# ggplot for relating income to percentage attended births
+ggplot(final_table,aes(Birth_Skilled_Professional,Gross_Income,colour = Year )) + geom_point()  + xlab("Birth_Skilled_Professional") + ylab("Gross_Income") + theme(panel.background = element_rect(fill = "gray73", 
+    colour = "blue2"), plot.background = element_rect(fill = "beige"))
+
+
+# Use the country_choropleth() function in the choroplethr package to make a world map of maternal mortality, using the most recent year for each country in the merged dataset you created. The defaults of the function will be fine; no need to tune up the plot. You can read the help file to see how the data must be formatted; you may need to rename the countries from the dataset that you've created.
+
+# library(dplyr);
+
+# Getting the most recent year for each country
+
+
+final_table1<- final_table %>% group_by(Country) %>% arrange(desc(Year)) %>%  slice(1) %>% select(Country, Mortality_Ratio1) %>% na.omit(final_table$Mortality_Ratio1)
+
+
+# Assigning first column as region
+colnames(final_table1)[1] <- "region"
+
+# Assigning second column as value
+
+colnames(final_table1)[2] <- "value"
+
+final_country <- subset(final_table1, select = c(region, value))
+
+final_country$region <- tolower(final_country$region)
+
+library(choroplethr)
+
+country_choropleth(final_country , "Maternal Mortality" )
+```
